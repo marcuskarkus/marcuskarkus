@@ -18,6 +18,7 @@
     if (SUPABASE_URL.indexOf('PASTE-') === 0 || SUPABASE_KEY.indexOf('PASTE-') === 0) return;
 
     let supa = null, pushTimer = null, suppressSync = false, lastSyncedJson = null;
+    let cachedAccessToken = null;
 
     function matches(k) {
       if (!k) return false;
@@ -95,7 +96,7 @@
           method: 'POST',
           headers: {
             'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Authorization': 'Bearer ' + (cachedAccessToken || SUPABASE_KEY),
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates',
           },
@@ -107,6 +108,13 @@
     }
     (async function init() {
       supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      try {
+        const { data: sessionData } = await supa.auth.getSession();
+        cachedAccessToken = (sessionData && sessionData.session && sessionData.session.access_token) || null;
+      } catch (e) {}
+      supa.auth.onAuthStateChange((_event, session) => {
+        cachedAccessToken = (session && session.access_token) || null;
+      });
       try {
         const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
         if (!error && data && data.data && Object.keys(data.data).length > 0) {
